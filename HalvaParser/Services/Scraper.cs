@@ -8,6 +8,8 @@ using HalvaParser.Models.Domain;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System;
+using System.Collections.Async;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -33,14 +35,11 @@ namespace HalvaParser.Services
             _plainTextMarkupFormatter = plainTextMarkupFormatter;
         }
 
-        private async Task DelayAsync()
+        private IBrowsingContext CreateBrowsingContext()
         {
-            var delay = _commandLineOptions.Delay;
-            if (delay > 0)
-            {
-                _logger.LogDebug($"Sleep for {delay} milliseconds...");
-                await Task.Delay(TimeSpan.FromMilliseconds(delay));
-            }
+            var browsingContextConfig = Configuration.Default.WithDefaultLoader().WithCss().WithLocaleBasedEncoding().WithCookies();
+            var browsingContext = BrowsingContext.New(browsingContextConfig);
+            return browsingContext;
         }
 
         private string GetHref(IElement link)
@@ -87,7 +86,6 @@ namespace HalvaParser.Services
                 pageUriList = await GetPagePartnerUriListAsync(i, browsingContext, cancellationToken);
                 allUriList.AddRange(pageUriList);
                 i++;
-                await DelayAsync();
             } while (pageUriList.Count > 0);
 
             _logger.LogInformation($"obtaining partner URIs finished ({allUriList.Count} total)");
@@ -169,37 +167,34 @@ namespace HalvaParser.Services
                 pagePartnerShops = await GetPartnerShopsPageAsync(partnerUri, csrf, offset, limit, browsingContext, cancellationToken);
                 allPartnerShops.AddRange(pagePartnerShops);
                 offset += limit;
-                await DelayAsync();
             } while (pagePartnerShops.Count > 0);
 
             _logger.LogInformation($"obtaining partner shops finished ({allPartnerShops.Count} total)");
             return allPartnerShops;
         }
 
-        public async Task<Dictionary<string, List<PartnerShop>>> GetAllPartnerShopsAsync(List<string> partnerUriList, IBrowsingContext browsingContext, CancellationToken cancellationToken)
+        public async Task<Dictionary<string, List<PartnerShop>>> GetAllPartnerShopsAsync(List<string> partnerUriList, CancellationToken cancellationToken)
         {
             _logger.LogInformation("obtaining partners shops started");
-            var allPartnerShops = new Dictionary<string, List<PartnerShop>>();
+            var allPartnerShops = new ConcurrentDictionary<string, List<PartnerShop>>();
 
-            foreach (var partnerUri in partnerUriList)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var partnerShops = await GetPartnerShopsAsync(partnerUri, browsingContext, cancellationToken);
-                allPartnerShops.Add(partnerUri, partnerShops);
-                await DelayAsync();
-            }
-
+            await partnerUriList.ParallelForEachAsync(async partnerUri =>
+                {
+                    var browsingContext = CreateBrowsingContext();
+                    var partnerShops = await GetPartnerShopsAsync(partnerUri, browsingContext, cancellationToken);
+                    allPartnerShops.TryAdd(partnerUri, partnerShops);
+                }, 10, cancellationToken);
+            
             _logger.LogInformation($"obtaining partners shops finished ({allPartnerShops.Count} total)");
-            return allPartnerShops;
+            return allPartnerShops.ToDictionary(x => x.Key, x => x.Value);
         }
 
         public async Task<Dictionary<string, List<PartnerShop>>> ScrapeAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("scraping started");
-            var browsingContextConfig = Configuration.Default.WithDefaultLoader().WithCss().WithLocaleBasedEncoding().WithCookies();
-            var browsingContext = BrowsingContext.New(browsingContextConfig);
+            var browsingContext = CreateBrowsingContext();
             var partnerUriList = await GetPartnerUriListAsync(browsingContext, cancellationToken);
-            var partnerShops = await GetAllPartnerShopsAsync(partnerUriList, browsingContext, cancellationToken);
+            var partnerShops = await GetAllPartnerShopsAsync(partnerUriList, cancellationToken);
             _logger.LogInformation($"scraping finished ({partnerShops.Count} partners total)");
             return partnerShops;
         }

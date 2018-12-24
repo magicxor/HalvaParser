@@ -9,10 +9,7 @@ namespace HalvaParser.Models.Application
 
         [Option('r', "delimiter", Required = false, HelpText = "Delimiter, for example: ,", Default = ";")]
         public string Delimiter { get; set; }
-
-        [Option('d', "delay", Required = false, HelpText = "Delay in milliseconds, for example: 200", Default = 500)]
-        public int Delay { get; set; }
-
+        
         [Option('t', "latitude", Required = false, HelpText = "Latitude", Default = "55.7558")]
         public string Latitude { get; set; }
 
