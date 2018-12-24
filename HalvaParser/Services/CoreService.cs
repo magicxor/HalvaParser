@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using HalvaParser.Models.Domain;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
 using System.Threading;
@@ -24,8 +25,27 @@ namespace HalvaParser.Services
             try
             {
                 var items = await _scraper.ScrapeAsync(cancellationToken);
-                var values = items.SelectMany(item => item.Value).ToList();
-                _exporter.ExportToCsv(values);
+                var dtoList = items
+                    .SelectMany(item => item.Value)
+                    .Select(item => new PartnerShopDto()
+                    {
+                        Name = item.Name,
+                        City = item.City,
+                        Address = item.Address,
+                        Phone1 = item.Phones.ElementAtOrDefault(0),
+                        Phone2 = item.Phones.ElementAtOrDefault(1),
+                        KladrId = item.KladrId,
+                        ShopId = item.ShopId,
+                        IconUrl = item.IconUrl,
+                        InstallmentPeriod = item.InstallmentPeriod,
+                        Site = item.Site,
+                        Latitude = item.Point.ElementAtOrDefault(0),
+                        Longitude = item.Point.ElementAtOrDefault(1),
+                        PartnerName = item.PartnerName,
+                        SiteTitle = item.SiteTitle,
+                        Distance = item.Distance,
+                    }).ToList();
+                _exporter.ExportToCsv(dtoList);
             }
             catch (OperationCanceledException e)
             {
