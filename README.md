@@ -1,0 +1,2 @@
+# HalvaParser
+halvacard.ru parser
