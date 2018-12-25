@@ -88,6 +88,7 @@ namespace HalvaParser.Services
                 i++;
             } while (pageUriList.Count > 0);
 
+            allUriList = allUriList.Where(x => !x.Contains("shops/internet/")).ToList();
             _logger.LogInformation($"obtaining partner URIs finished ({allUriList.Count} total)");
             return allUriList;
         }
@@ -184,7 +185,7 @@ namespace HalvaParser.Services
                     var partnerShops = await GetPartnerShopsAsync(partnerUri, browsingContext, cancellationToken);
                     allPartnerShops.TryAdd(partnerUri, partnerShops);
                 }, 10, cancellationToken);
-            
+
             _logger.LogInformation($"obtaining partners shops finished ({allPartnerShops.Count} total)");
             return allPartnerShops.ToDictionary(x => x.Key, x => x.Value);
         }
